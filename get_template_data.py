@@ -24,7 +24,9 @@ SQL_DATABASE = os.getenv("SQL_DATABASE")
 SQL_USERNAME = os.getenv("SQL_USERNAME")
 SQL_PASSWORD = os.getenv("SQL_PASSWORD")
 SQL_DRIVER = os.getenv("SQL_DRIVER")
+SQL_DATABASE_TEMPLATES = os.getenv("SQL_DATABASE_TEMPLATES")
 CONNECTION_STRING = f"driver={{{SQL_DRIVER}}}; server={SQL_SERVER}; database={SQL_DATABASE}; UID={SQL_USERNAME}; PWD={SQL_PASSWORD}"
+CONNECTION_STRING_TEMPLATES = f"driver={{{SQL_DRIVER}}}; server={SQL_SERVER}; database={SQL_DATABASE_TEMPLATES}; UID={SQL_USERNAME}; PWD={SQL_PASSWORD}"
 BTMKR_ACCESS_TOKEN = os.getenv("BTMKR_ACCESS_TOKEN")
 
 
@@ -413,39 +415,6 @@ where rcon.fecha_servicio = '{service_date}'"""
     manifest_por = merged_data[merged_data["Language"] == "pt"].to_dict(orient="records")
     manifest_eng = merged_data[merged_data["Language"] == "en"].to_dict(orient="records")
 
-    # START TESTING
-    # nums = [
-    #     ("56953511669", "José  Sánchez"),
-    #     ("59898577254", "Paula Ahumada"),
-    #     ("56998446090", "Edgar Lobos"),
-    #     ("56932281981", "Elvis Santeliz"),
-    #     ("56942201750", "Sebastián Valdés"),
-    #     ("56931948153", "Felipe Vilches")
-    #     ]
-    # nums = nums[:2]
-    # n_contactos = len(nums)
-    # actual = 0
-    # manifest_esp = manifest_esp[:n_contactos]
-    # manifest_por = manifest_por[:n_contactos]
-    # manifest_eng = manifest_eng[:n_contactos]
-    # while actual < n_contactos:
-    #     try:
-    #         manifest_esp[actual]["ContactNumber"] = nums[actual][0]
-    #         manifest_esp[actual]["ContactName"] = nums[actual][1]
-    #     except IndexError:
-    #         logging.error("No hay elemento a modificar")
-    #     try:
-    #         manifest_eng[actual]["ContactNumber"] = nums[actual][0]
-    #         manifest_eng[actual]["ContactName"] = nums[actual][1]
-    #     except IndexError:
-    #         logging.error("No hay elemento a modificar")
-    #     try:
-    #         manifest_por[actual]["ContactNumber"] = nums[actual][0]
-    #         manifest_por[actual]["ContactName"] = nums[actual][1]
-    #     except IndexError:
-    #         logging.error("No hay elemento a modificar")
-    #     actual += 1
-    # END TESTING
     logging.info("Separando listados...")
     # armar estructura
     contact_info_esp = []
@@ -536,6 +505,92 @@ where rcon.fecha_servicio = '{service_date}'"""
     conx.close()
     return func.HttpResponse(txt_output, status_code=200)
 
+
+def registrar_contactados(pax_contactados: list) -> None:
+    conx = odbc.connect(CONNECTION_STRING_TEMPLATES)
+    cursor = conx.cursor()
+    for pax in pax_contactados:
+        notificado = pax["variables"]["customer_sale_id"]
+        origen = "msg.notificaciones_no_contactados"
+        uso = "Notificacion Traslado CyT"
+        medio = "Botmaker/Whatsapp"
+        query = f"exec msg.registrar_contactados '{notificado}', '{origen}', '{uso}', '{medio}'"
+        cursor.execute(query)
+        cursor.commit()
+    conx.close()
+
+
+def notificacion_traslado_cyt() -> list:
+    """Envía notificaciones de Traslado CyT a los contactos que no han sido contactados previamente."""
+    logging.info("Enviando notificaciones de Traslado CyT...")
+    logging.info("Conectando a la base de datos...")
+    conx = odbc.connect(CONNECTION_STRING_TEMPLATES)
+    cursor = conx.cursor()
+    query = "SELECT * FROM msg.notificaciones_no_contactados"
+    logging.info(f"Ejecutando consulta:\n{query}")
+    cursor.execute(query)
+    rows = cursor.fetchall()
+    contactos_esp = []
+    contactos_por = []
+    contactos_eng = []
+    logging.info("Recopilando datos...")
+    contactos_all = []
+    for row in rows:
+        idioma = row.Language
+        phone_number = row.PhoneNumber
+        customer_name = row.Name
+        if row.LastName:
+            customer_name += f" {row.LastName}"
+        date = row.Date.strftime("%d/%m/%Y")
+        time = row.Time[:-3]
+        saleid = row.ozyTripSalesCode
+        qty = row.QtyPax
+        this_contact = {
+            "contactId": phone_number,
+            "variables": {
+                "customer_name": customer_name,
+                "customer_sale_id": saleid,
+                "service_passenger_number": str(qty),
+                "cyt_date": date,
+                "cyt_time": time,
+                "headerImageUrl": "https://automsg.blob.core.windows.net/files/horarios_cyt.png",
+            }
+        }
+        ct_gen = {
+            "contactId": phone_number,
+            "customer_name": customer_name,
+            "customer_sale_id": saleid,
+            "service_passenger_number": str(qty),
+            "cyt_date": date,
+            "cyt_time": time,
+            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "language": idioma
+        }
+        contactos_all.append(ct_gen)
+        if idioma == "ES":
+            contactos_esp.append(this_contact)
+        elif idioma == "PT":
+            contactos_por.append(this_contact)
+        elif idioma == "EN":
+            contactos_eng.append(this_contact)
+    logging.info(f"Contactos en español: {len(contactos_esp)}")
+    logging.info(f"Contactos en portugués: {len(contactos_por)}")
+    logging.info(f"Contactos en inglés: {len(contactos_eng)}")
+    whatsapp_channel_id = "turistik-whatsapp-56957661080"
+    if contactos_esp:
+        response = send_msg(campaign="CYT TRASLADO V2", channel_id=whatsapp_channel_id, notification_name="CyT Traslado ESP V2", template="traslado_cyt_esp_2", contacts=contactos_esp)
+        registrar_contactados(contactos_esp)
+        logging.info("Notificación enviada a contactos en español.")
+    if contactos_por:
+        response = send_msg(campaign="CYT TRASLADO V2", channel_id=whatsapp_channel_id, notification_name="CyT Traslado POR V2", template="traslado_cyt_por_2", contacts=contactos_por)
+        registrar_contactados(contactos_por)
+        logging.info("Notificación enviada a contactos en portugués.")
+    if contactos_eng:
+        response = send_msg(campaign="CYT TRASLADO V2", channel_id=whatsapp_channel_id, notification_name="CyT Traslado ENG V2", template="traslado_cyt_eng_2", contacts=contactos_eng)
+        registrar_contactados(contactos_eng)
+        logging.info("Notificación enviada a contactos en inglés.")
+    return contactos_all
+        
 
 @get_template_data.route(route="test_dataframe", auth_level=func.AuthLevel.FUNCTION)
 def test_dataframe(req: func.HttpRequest) -> func.HttpResponse:

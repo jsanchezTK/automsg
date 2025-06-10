@@ -10,6 +10,7 @@ import pyodbc as odbc
 import datetime
 from datetime import timedelta, datetime
 from woocommerce import API
+import json
 
 #from woo_commerce_update import woo_commerce_update, get_products
 #from gpt_translate import gpt_translate, translate_wc_values
@@ -17,7 +18,7 @@ from get_template_data import get_template_data
 
 from woo_commerce_update import get_products
 from gpt_translate import translate_wc_values
-from get_template_data import test_fun, send_notifications, update_domains, check_quotas
+from get_template_data import test_fun, send_notifications, update_domains, check_quotas, notificacion_traslado_cyt
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 # app.register_functions(woo_commerce_update)
@@ -289,5 +290,17 @@ def test_translations(req: func.HttpRequest) -> func.HttpResponse:
     except Exception as e:
         logging.error(f"Translations failed: {type(e).__name__}")
         reply = f"Translations failed: {type(e).__name__}"
+        cod = 500
+    return func.HttpResponse(reply, status_code=cod)
+
+@app.route(route="http_trigger", auth_level=func.AuthLevel.FUNCTION)
+def notificacion_cyt_traslado(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        envio = notificacion_traslado_cyt()
+        reply = json.dumps(envio)
+        cod = 200
+    except Exception as e:
+        logging.error(f"Notificaciones CyT Error: {type(e).__name__}")
+        reply = f"Notificaciones CyT Error: {type(e).__name__}"
         cod = 500
     return func.HttpResponse(reply, status_code=cod)
