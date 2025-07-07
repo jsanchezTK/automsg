@@ -553,7 +553,7 @@ def notificacion_traslado_cyt() -> list:
                 "service_passenger_number": str(qty),
                 "cyt_date": date,
                 "cyt_time": time,
-                "headerImageUrl": "https://automsg.blob.core.windows.net/files/horarios_cyt.png",
+                "headerImageUrl": "https://automsg.blob.core.windows.net/files/flyer_cyt_v1.png",
             }
         }
         ct_gen = {
