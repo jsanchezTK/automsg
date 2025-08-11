@@ -317,7 +317,8 @@ def registrar_clientes(req: func.HttpRequest) -> func.HttpResponse:
     SQL_DATABASE = os.getenv('SQL_DATABASE')
     SQL_USERNAME = os.getenv('SQL_USERNAME')
     SQL_PASSWORD = os.getenv('SQL_PASSWORD')
-    connection_string = f"Driver={{ODBC Driver 17 for SQL Server}};Server={SQL_SERVER};Database={SQL_DATABASE};UID={SQL_USERNAME};PWD={SQL_PASSWORD};"
+    SQL_DRIVER = os.getenv('SQL_DRIVER')
+    connection_string = f"Driver={{{SQL_DRIVER}}};Server={SQL_SERVER};Database={SQL_DATABASE};UID={SQL_USERNAME};PWD={SQL_PASSWORD};"
 
     conn = odbc.connect(connection_string)
     cursor = conn.cursor()
