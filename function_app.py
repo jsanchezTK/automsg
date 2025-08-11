@@ -304,3 +304,30 @@ def notificacion_cyt_traslado(req: func.HttpRequest) -> func.HttpResponse:
         reply = f"Notificaciones CyT Error: {type(e).__name__}"
         cod = 500
     return func.HttpResponse(reply, status_code=cod)
+
+
+@app.route(route="registrar_clientes")
+def registrar_clientes(req: func.HttpRequest) -> func.HttpResponse:
+    req_body = req.get_json()
+    userid = req_body.get('userid')
+    telefono = req_body.get('telefono')
+    valoracion = req_body.get('valoracion')
+
+    SQL_SERVER = os.getenv('SQL_SERVER')
+    SQL_DATABASE = os.getenv('SQL_DATABASE')
+    SQL_USERNAME = os.getenv('SQL_USERNAME')
+    SQL_PASSWORD = os.getenv('SQL_PASSWORD')
+    connection_string = f"Driver={{ODBC Driver 17 for SQL Server}};Server={SQL_SERVER};Database={SQL_DATABASE};UID={SQL_USERNAME};PWD={SQL_PASSWORD};"
+
+    conn = odbc.connect(connection_string)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO btmkr.leads_fotos (userid, telefono, valoracion, createdAt) VALUES (?, ?, ?, GETDATE())", (userid, telefono, valoracion))
+        conn.commit()
+        return func.HttpResponse("Cliente registrado exitosamente.", status_code=200)
+    except Exception as e:
+        logging.error(f"Error al registrar cliente: {e}")
+        return func.HttpResponse("Error al registrar cliente.", status_code=500)
+    finally:
+        cursor.close()
+        conn.close()
