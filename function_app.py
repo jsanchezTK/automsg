@@ -332,3 +332,18 @@ def registrar_clientes(req: func.HttpRequest) -> func.HttpResponse:
     finally:
         cursor.close()
         conn.close()
+
+
+@app.route(route="update_tren", auth_level=func.AuthLevel.FUNCTION)
+def update_tren(req: func.HttpRequest) -> func.HttpResponse:
+    from update_leads_tren import actualizar_tren
+    try:
+        payload = actualizar_tren()
+        return func.HttpResponse(
+        body=json.dumps(payload, ensure_ascii=False),
+        status_code=200,
+        mimetype="application/json"  # sets Content-Type: application/json; charset=utf-8
+    )
+    except Exception as e:
+        logging.error(f"Error al actualizar leads: {e}")
+        return func.HttpResponse("Error al actualizar leads.", status_code=500)
