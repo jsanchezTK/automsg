@@ -78,10 +78,18 @@ def crear_imagenes_wp() -> None:
     conx = odbc.connect(CONNECTION_STRING)
     cursor = conx.cursor()
     query = """
-            SELECT [service_id],
-                   [img_origen]
-            FROM [OzyTrip].[stagingServiciosWooCommerce]
-            where img_png = '' and ozytrip_id != 'N/A'
+        select service_id, img_origen from [OzyTrip].[stagingServiciosWooCommerce]
+        where 
+        LEFT(
+                RIGHT(img_origen, CHARINDEX('/', REVERSE(img_origen)) - 1),
+                CHARINDEX('.', RIGHT(img_origen, CHARINDEX('/', REVERSE(img_origen)) - 1)) - 1
+            )
+            !=  
+        LEFT(
+                RIGHT(img_png, CHARINDEX('/', REVERSE(img_png)) - 1),
+                CHARINDEX('.', RIGHT(img_png, CHARINDEX('/', REVERSE(img_png)) - 1)) - 1
+            )
+            and ozytrip_id != 'N/A'
     """
     cursor.execute(query)
     data = cursor.fetchall()
