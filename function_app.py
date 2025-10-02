@@ -190,7 +190,6 @@ def wc_list_products_pa():
     return response
 
 
-
 @app.timer_trigger(schedule="0 25 20,23 * * *", arg_name="myTimer", run_on_startup=False,
               use_monitor=False) 
 def enviar_recordatorios(myTimer: func.TimerRequest) -> None:
@@ -347,3 +346,13 @@ def update_tren(req: func.HttpRequest) -> func.HttpResponse:
     except Exception as e:
         logging.error(f"Error al actualizar leads: {e}")
         return func.HttpResponse("Error al actualizar leads.", status_code=500)
+
+
+@app.route(route="update_imagenes", auth_level=func.AuthLevel.FUNCTION)
+def update_imagenes(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        crear_imagenes_wp()
+        return func.HttpResponse("Imágenes actualizadas exitosamente.", status_code=200)
+    except Exception as e:
+        logging.error(f"Error al actualizar imágenes: {e}")
+        return func.HttpResponse("Error al actualizar imágenes.", status_code=500)
