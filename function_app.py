@@ -18,7 +18,7 @@ from get_template_data import get_template_data
 
 from woo_commerce_update import get_products
 from gpt_translate import translate_wc_values
-from get_template_data import test_fun, send_notifications, update_domains, check_quotas, notificacion_traslado_cyt
+from get_template_data import send_notifications, update_domains, check_quotas, notificacion_traslado_cyt, send_discount
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 # app.register_functions(woo_commerce_update)
@@ -364,3 +364,19 @@ def update_imagenes(req: func.HttpRequest) -> func.HttpResponse:
     except Exception as e:
         logging.error(f"Error al actualizar imágenes: {e}")
         return func.HttpResponse("Error al actualizar imágenes.", status_code=500)
+
+@app.route(route="enviar_dcto_cross_selling", auth_level=func.AuthLevel.FUNCTION)
+def enviar_dcto_cross_selling(req: func.HttpRequest) -> func.HttpResponse:
+    Date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    isTest = req.params.get("test", "true").lower() == "true"
+    logContacts = req.params.get("logContacts", "false").lower() == "true"
+    try:
+        send_discount(Date, test=isTest, logContacts=logContacts)
+        reply = "Notificaciones enviadas"
+        cod = 200
+    except Exception as e:
+        logging.error(f"No se pudo enviar notificaciones: {type(e).__name__}")
+        reply = f"No se pudo enviar: {type(e).__name__}"
+        cod = 500
+    finally:
+        return func.HttpResponse(reply, status_code=cod)

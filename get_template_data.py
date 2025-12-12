@@ -635,3 +635,125 @@ def test_dataframe(req: func.HttpRequest) -> func.HttpResponse:
         }
         contact_info.append(this_contact)
     return func.HttpResponse(json.dumps(contact_info), status_code=200)
+
+
+def filtrar_ya_contactados(manifest: list) -> list:
+    """Filtra los contactos que ya han sido contactados previamente."""
+    conx = odbc.connect(CONNECTION_STRING)
+    cursor = conx.cursor()
+    query = "SELECT distinct ContactNumber FROM ozytrip.contactadosCrossSellingWhatsApp"
+    cursor.execute(query)
+    contactados = {row.ContactNumber for row in cursor.fetchall()}
+    conx.close()
+    manifest_filtrado = [pax for pax in manifest if pax["ContactNumber"] not in contactados]
+    return manifest_filtrado
+
+def registrar_contactados(manifest: list) -> None:
+    """Registra los contactos que han sido contactados."""
+    conx = odbc.connect(CONNECTION_STRING)
+    cursor = conx.cursor()
+    for pax in manifest:
+        query = f"""INSERT INTO ozytrip.contactadosCrossSellingWhatsApp (SaleId, ServiceName, TourCode, ContactName, ContactNumber, ContactLanguage)
+        VALUES ('{pax["SaleId"]}', '{pax["Service"]}', '{pax["Tourcode"]}', '{pax["ContactName"]}', '{pax["ContactNumber"]}', '{pax["Language"]}')"""
+        cursor.execute(query)
+        cursor.commit()
+    conx.close()
+
+
+def send_discount(service_date: str, test=True, log_contacts=False) -> None:
+    logging.info("Enviando notificaciones de descuento...")
+    manifest = get_manifest(service_date)
+    if test:
+        new_manifest = []
+        numbers = ["56953511669", "56981495862"]
+        for i in range(len(numbers)):
+            this_contact = manifest[i]
+            this_contact["ContactNumber"] = numbers[i] 
+            new_manifest.append(this_contact)   
+        manifest = new_manifest
+    manifest = filtrar_ya_contactados(manifest)
+    old_manifest = manifest
+    if not manifest:
+        return func.HttpResponse("Sin notificaciones para enviar.", status_code=200)
+    else:
+        if not test:
+            manifest = standardize_phone_numbers(manifest)
+        manifest_df = pd.DataFrame(manifest)
+        manifest_df['ContactNumber'] = manifest_df['ContactNumber'].str.replace('+', '', regex=False)
+        manifest_df = manifest_df[["SaleId", "Service", "ContactName", "Language", "ContactNumber", "Tourcode"]]
+        manifest_esp = manifest_df[manifest_df["Language"] == "es"].to_dict(orient="records")
+        manifest_por = manifest_df[manifest_df["Language"] == "pt"].to_dict(orient="records")
+        manifest_eng = manifest_df[manifest_df["Language"] == "en"].to_dict(orient="records")
+
+        header_img = "https://automsg.blob.core.windows.net/files/icono_turistik.png"
+
+        logging.info("Separando listados...")
+        # armar estructura
+        contact_info_esp = []
+        for i in manifest_esp:
+            this_contact = {
+                "contactId": i["ContactNumber"],
+                "variables": {
+                    "customer_name": i["ContactName"],
+                    "current_service": i["Service"],
+                    "headerImageUrl": header_img,
+                    "customer_sale_id": i["SaleId"]
+                }
+            }
+            contact_info_esp.append(this_contact)
+
+        contact_info_por = []
+        for i in manifest_por:
+            this_contact = {
+                "contactId": i["ContactNumber"],
+                "variables": {
+                    "customer_name": i["ContactName"],
+                    "current_service": i["Service"],
+                    "headerImageUrl": header_img,
+                    "customer_sale_id": i["SaleId"]
+                }
+            }
+            contact_info_por.append(this_contact)
+
+        contact_info_eng = []
+        for i in manifest_eng:
+            this_contact = {
+                "contactId": i["ContactNumber"],
+                "variables": {
+                    "customer_name": i["ContactName"],
+                    "current_service": i["Service"],
+                    "headerImageUrl": header_img,
+                    "customer_sale_id": i["SaleId"]
+                }
+            }
+            contact_info_eng.append(this_contact)
+        
+        whatsapp_channel_id = "turistik-whatsapp-56962606008"
+        template_base = "cross_selling"
+        version_template = "0_3"
+        version_camapaign = "0"
+        campaign_name = f"Descuentos Cross Selling V{version_camapaign}"
+        languages = [
+                {"lang": "ESP", "notification_name": f"Descuento Cross Selling ESP {version_template}", "contacts": contact_info_esp},
+                {"lang": "POR", "notification_name": f"Descuento Cross Selling POR {version_template}", "contacts": contact_info_por},
+                {"lang": "ENG", "notification_name": f"Descuento Cross Selling ENG {version_template}", "contacts": contact_info_eng}
+            ]
+        for i in languages:
+            language = i["lang"]
+            if i["contacts"]:
+                template_name = f"{template_base}_{language}_{version_template}".lower()
+                response = send_msg(campaign=campaign_name, channel_id=whatsapp_channel_id, notification_name=i["notification_name"], template=template_name, contacts=i["contacts"])
+                logging.info(str(response.content))
+                txt_output = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+": "+str(response.content)
+                txt_output.replace("b''", f"{language}: {len(contact_info_esp)} notificaciones enviadas.")
+                logging.info(txt_output)
+                manifest_dict_lang = list(filter(lambda x: x["Language"] == language.lower(), old_manifest))
+                if log_contacts:
+                    registrar_contactados(manifest_dict_lang)
+                time.sleep(2)
+
+        return func.HttpResponse(txt_output, status_code=200)
+
+if __name__ == "__main__":
+    ayer = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    send_discount(ayer, test=True, log_contacts=True)

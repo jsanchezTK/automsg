@@ -6,9 +6,9 @@
 
 import azure.functions as func
 import logging
-import json
+# import json
 import requests
-from requests.auth import HTTPBasicAuth
+# from requests.auth import HTTPBasicAuth
 import os
 import pandas as pd
 from io import BytesIO
@@ -19,7 +19,7 @@ import pytz
 import pyodbc as odbc
 import re
 import traceback
-from woocommerce import API 
+# from woocommerce import API 
 
 woo_commerce_update = func.Blueprint()
 
