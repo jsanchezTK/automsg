@@ -8,7 +8,7 @@ from azure.storage.blob import BlobServiceClient, ContentSettings
 import os
 import pyodbc as odbc
 import datetime
-from datetime import timedelta, datetime
+# from datetime import timedelta, datetime
 from woocommerce import API
 import json
 
@@ -220,7 +220,7 @@ def enviar_recordatorios(myTimer: func.TimerRequest) -> None:
     except Exception as e:
         logging.error(f"No se pudo traducir y/o almacenar traducciones: {type(e).__name__}")   
     # Enviar notificaciones
-    fecha = (datetime.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+    fecha = (datetime.today() + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     logging.info(f"Enviar notificaciones: {fecha}...")
     try:
         send_notifications(fecha)
@@ -367,16 +367,15 @@ def update_imagenes(req: func.HttpRequest) -> func.HttpResponse:
 
 @app.route(route="enviar_dcto_cross_selling", auth_level=func.AuthLevel.FUNCTION)
 def enviar_dcto_cross_selling(req: func.HttpRequest) -> func.HttpResponse:
-    Date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    fecha = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     isTest = req.params.get("test", "true").lower() == "true"
     logContacts = req.params.get("logContacts", "false").lower() == "true"
     try:
-        send_discount(Date, test=isTest, logContacts=logContacts)
+        send_discount(fecha, test=isTest, log_contacts=logContacts)
         reply = "Notificaciones enviadas"
         cod = 200
     except Exception as e:
         logging.error(f"No se pudo enviar notificaciones: {type(e).__name__}")
         reply = f"No se pudo enviar: {type(e).__name__}"
         cod = 500
-    finally:
-        return func.HttpResponse(reply, status_code=cod)
+    return func.HttpResponse(reply, status_code=cod)

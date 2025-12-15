@@ -665,7 +665,7 @@ def send_discount(service_date: str, test=True, log_contacts=False) -> None:
     manifest = get_manifest(service_date)
     if test:
         new_manifest = []
-        numbers = ["56953511669", "56981495862"]
+        numbers = ["56953511669"]
         for i in range(len(numbers)):
             this_contact = manifest[i]
             this_contact["ContactNumber"] = numbers[i] 
