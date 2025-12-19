@@ -6,9 +6,10 @@
 
 import azure.functions as func
 import logging
-# import json
+import json
+# from json import JsonDecodeError
 import requests
-# from requests.auth import HTTPBasicAuth
+from requests.auth import HTTPBasicAuth
 import os
 import pandas as pd
 from io import BytesIO
@@ -19,7 +20,6 @@ import pytz
 import pyodbc as odbc
 import re
 import traceback
-# from woocommerce import API 
 
 woo_commerce_update = func.Blueprint()
 
@@ -149,31 +149,30 @@ def create_scoped_credential_and_external_data_source(sas_token, cursor: odbc.Cu
         logging.info("An error occurred:", e)
 
 
-# def wc_list_products_library():
-#     tz = pytz.timezone('Chile/Continental')
-#     tz_utc = pytz.timezone('UTC')
-#     delta = datetime.now(tz=tz_utc).hour - datetime.now(tz=tz).hour
-#     iso_time = (datetime.combine((datetime.now() + timedelta(hours=delta, days=-8)).date(),time.min)).isoformat()
-#     wcapi = API(
-#         url="https://turistik.com", # Your store URL
-#         consumer_key=WC_CLIENT_KEY, # Your consumer key
-#         consumer_secret=WC_CLIENT_SECRET, # Your consumer secret
-#         wp_api=True, # Enable the WP REST API integration
-#         version="wc/v3", # WooCommerce WP REST API version,,
-#         timeout=30,
-#         tbp = "tr101"
-#     )
-#     payload = f"per_page=100&modified_after={iso_time}"
-#     response = wcapi.get(f"products?{payload}")
-#     return response
-# 
-# 
-# def wc_list_products_request():
-#     basic_auth = HTTPBasicAuth(WC_CLIENT_KEY,WC_CLIENT_SECRET)
-#     payload = {"per_page": 10}
-#     headers = {"tbp": "tr101"}
-#     response = requests.get("https://turistik.com/wp-json/wc/v3/products", auth=basic_auth, params=payload, headers=headers)
-#     return response
+def wc_list_products_library(): 
+    from woocommerce import API 
+    tz = pytz.timezone('Chile/Continental')
+    tz_utc = pytz.timezone('UTC')
+    delta = datetime.now(tz=tz_utc).hour - datetime.now(tz=tz).hour
+    iso_time = (datetime.combine((datetime.now() + timedelta(hours=delta, days=-8)).date(),time.min)).isoformat()
+    wcapi = API(
+        url="https://turistik.com", # Your store URL
+        consumer_key=WC_CLIENT_KEY, # Your consumer key
+        consumer_secret=WC_CLIENT_SECRET, # Your consumer secret
+        wp_api=True, # Enable the WP REST API integration
+        version="wc/v3" # WooCommerce WP REST API version
+    )
+    payload = f"per_page=100&modified_after={iso_time}"
+    response = wcapi.get(f"products?{payload}")
+    return response
+
+
+def wc_list_products_request():
+    basic_auth = HTTPBasicAuth(WC_CLIENT_KEY,WC_CLIENT_SECRET)
+    payload = {"per_page": 20}
+    headers = {"tbp": "tr101"}
+    response = requests.get(WC_PRODUCTS_API, auth=basic_auth, params=payload, headers=headers)
+    return response
 
 
 def wc_list_products_pa():
@@ -360,3 +359,12 @@ def get_products() -> None:
         cod_status = 200
         reply = "Función ejecutada correctamente."
     logging.info(f"Función ejecutada con código {str(cod_status)}")
+
+
+if __name__ == "__main__":
+    products = wc_list_products_request()
+    try:
+        print(products.json())
+    except json.JSONDecodeError:
+        print(products.text)
+    print("Done")

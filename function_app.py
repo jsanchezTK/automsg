@@ -368,10 +368,11 @@ def update_imagenes(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="enviar_dcto_cross_selling", auth_level=func.AuthLevel.FUNCTION)
 def enviar_dcto_cross_selling(req: func.HttpRequest) -> func.HttpResponse:
     fecha = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-    isTest = req.params.get("test", "true").lower() == "true"
-    logContacts = req.params.get("logContacts", "false").lower() == "true"
+    req_body = req.get_json()
+    test = req_body.get("test", "false").lower() == "true"
+    log_contacts = req_body.get("log_contacts", "false").lower() == "true"
     try:
-        send_discount(fecha, test=isTest, log_contacts=logContacts)
+        send_discount(fecha, test=test, log_contacts=log_contacts)
         reply = "Notificaciones enviadas"
         cod = 200
     except Exception as e:

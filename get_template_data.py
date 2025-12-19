@@ -659,11 +659,24 @@ def registrar_contactados(manifest: list) -> None:
         cursor.commit()
     conx.close()
 
+def get_previous_day_passengers(fecha_servicio: str) -> list:
+    stored_procedure = "ozytrip.listado_controlados_dia_anterior"
+    conn = odbc.connect(CONNECTION_STRING)
+    cursor = conn.cursor()
+    cursor.execute(f"EXEC {stored_procedure} @fecha='{fecha_servicio}'")
+    data = cursor.fetchall()
+    column_names = [column[0] for column in cursor.description]
+    conn.close()
+    data_dict = [dict(zip(column_names, row)) for row in data]
+    return data_dict
 
 def send_discount(service_date: str, test=True, log_contacts=False) -> None:
     logging.info("Enviando notificaciones de descuento...")
-    manifest = get_manifest(service_date)
+    manifest = get_previous_day_passengers(service_date)
+    logging.info(f"Manifest obtenido: {len(manifest)} registros")
+    
     if test:
+        logging.info("Modo TEST activado")
         new_manifest = []
         numbers = ["56953511669"]
         for i in range(len(numbers)):
@@ -671,19 +684,28 @@ def send_discount(service_date: str, test=True, log_contacts=False) -> None:
             this_contact["ContactNumber"] = numbers[i] 
             new_manifest.append(this_contact)   
         manifest = new_manifest
+        logging.info(f"Manifest filtrado para TEST: {len(manifest)} registros")
+    
     manifest = filtrar_ya_contactados(manifest)
+    logging.info(f"Manifest después de filtrar ya contactados: {len(manifest)} registros")
+    
     old_manifest = manifest
     if not manifest:
+        logging.warning("Sin notificaciones para enviar.")
         return func.HttpResponse("Sin notificaciones para enviar.", status_code=200)
     else:
         if not test:
+            logging.info("Estandarizando números telefónicos...")
             manifest = standardize_phone_numbers(manifest)
+        
         manifest_df = pd.DataFrame(manifest)
         manifest_df['ContactNumber'] = manifest_df['ContactNumber'].str.replace('+', '', regex=False)
         manifest_df = manifest_df[["SaleId", "Service", "ContactName", "Language", "ContactNumber", "Tourcode"]]
         manifest_esp = manifest_df[manifest_df["Language"] == "es"].to_dict(orient="records")
         manifest_por = manifest_df[manifest_df["Language"] == "pt"].to_dict(orient="records")
         manifest_eng = manifest_df[manifest_df["Language"] == "en"].to_dict(orient="records")
+        
+        logging.info(f"Contactos ESP: {len(manifest_esp)}, POR: {len(manifest_por)}, ENG: {len(manifest_eng)}")
 
         header_img = "https://automsg.blob.core.windows.net/files/icono_turistik.png"
 
@@ -738,22 +760,31 @@ def send_discount(service_date: str, test=True, log_contacts=False) -> None:
                 {"lang": "POR", "notification_name": f"Descuento Cross Selling POR {version_template}", "contacts": contact_info_por},
                 {"lang": "ENG", "notification_name": f"Descuento Cross Selling ENG {version_template}", "contacts": contact_info_eng}
             ]
+        
+        txt_output = ""
         for i in languages:
             language = i["lang"]
             if i["contacts"]:
+                logging.info(f"Enviando notificaciones para {language}...")
                 template_name = f"{template_base}_{language}_{version_template}".lower()
                 response = send_msg(campaign=campaign_name, channel_id=whatsapp_channel_id, notification_name=i["notification_name"], template=template_name, contacts=i["contacts"])
-                logging.info(str(response.content))
+                logging.info(f"Response {language}: {response.status_code} - {response.content}")
                 txt_output = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+": "+str(response.content)
-                txt_output.replace("b''", f"{language}: {len(contact_info_esp)} notificaciones enviadas.")
+                txt_output.replace("b''", f"{language}: {len(i['contacts'])} notificaciones enviadas.")
                 logging.info(txt_output)
                 manifest_dict_lang = list(filter(lambda x: x["Language"] == language.lower(), old_manifest))
                 if log_contacts:
+                    logging.info(f"Registrando {len(manifest_dict_lang)} contactos para {language}...")
                     registrar_contactados(manifest_dict_lang)
                 time.sleep(2)
+            else:
+                logging.warning(f"Sin contactos para enviar en {language}")
 
-        return func.HttpResponse(txt_output, status_code=200)
+        logging.info("Proceso completado")
+        return func.HttpResponse(json.dumps(old_manifest), status_code=200)
 
 if __name__ == "__main__":
     ayer = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-    send_discount(ayer, test=True, log_contacts=True)
+    send_discount(ayer, test=True, log_contacts=False)
+    # print(get_previous_day_passengers(ayer))
+    
